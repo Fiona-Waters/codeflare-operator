@@ -390,13 +390,16 @@ scorecard-bundle: install-operator-sdk ## Run scorecard tests on bundle image.
 	$(OPERATOR_SDK) scorecard bundle
 
 
-FILE ?= input.yaml  # Default value, it isn't a file, but the make cmds fill hang for longer without it
+FILE ?= input.yaml  # Default value, it isn't a file, but the make cmds will hang for longer without it
 temp_dir := temp_split
 output_dir := 'config/crd/'
 
+.PHONY: check_wget
+check_wget:
+	@command -v wget >/dev/null 2>&1 || (echo "Installing wget..."; yum install -y wget)
+
 .PHONY: check_yq
-check_yq:
-	@command -v yq >/dev/null 2>&1 || (echo "Installing wget..."; yum install -y wget)
+check_yq: check_wget
 	@command -v yq >/dev/null 2>&1 || (echo "Installing yq..."; wget https://github.com/mikefarah/yq/releases/download/v4.2.0/yq_linux_amd64.tar.gz -O - |\
   tar xz && mv yq_linux_amd64 /usr/bin/yq)
 
@@ -405,7 +408,7 @@ check_yq:
 split_yaml:
 	@$(MAKE) check_yq
 	@mkdir -p $(temp_dir)
-	@awk '/apiVersion: /{if (x>0) close("$(temp_dir)/section_" x ".yaml"); x++}{print > "$(temp_dir)/section_"x".yaml"}' $(FILE)
+	@gawk '/apiVersion: /{if (x>0) close("$(temp_dir)/section_" x ".yaml"); x++}{print > "$(temp_dir)/section_"x".yaml"}' $(FILE)
 	@$(MAKE) process_sections
 
 .PHONY: process_sections
@@ -415,5 +418,9 @@ process_sections:
 		metadata_name=$$(yq e '.metadata.name' $$section_file); \
 		file_name=$$(echo $$metadata_name | awk -F'.' '{print $$2"."$$3"_"$$1".yaml"}'); \
 		mv $$section_file $(output_dir)/$$file_name; \
+		rm $(output_dir)/$$file_name-e; \
+		rm 
 	done
 	@rm -r $(temp_dir)
+	@rm $(output_dir)/mcad.yaml
+
